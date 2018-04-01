@@ -1,0 +1,239 @@
+
+---
+title: "TS_case_study"
+author: "Shikhar Gupta"
+date: "11/17/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lawstat)
+library(tseries)
+library(forecast)
+library(corrplot)
+library(ggplot2)
+library(ggfortify)
+```
+
+```{r}
+#Loading data and keeping validation of the same size as test
+train <- read.csv('training.csv')
+test  <- read.csv('test.csv')
+valid <- read.csv('validation.csv')
+
+#missing values removal
+train <- na.omit(train)
+test <- na.omit(test)
+valid <- na.omit(valid)
+
+#subet train from 1992 onwards
+train.subset <- train[-(1:60),]
+
+#converting to ts object
+train.ts <- ts(train,start = 1987,frequency = 12)
+valid.ts <- ts(valid,start = 2009,frequency = 12)
+test.ts <- ts(test,start = 2011,frequency = 12)
+train.ts.subset <- ts(train.subset,start = 1992,frequency = 12)
+
+#log transform with original data
+log_train <- log(train.ts[,'Bankruptcy_Rate'])
+log_valid <- log(valid.ts[,'Bankruptcy_Rate'])
+
+log_train_pop <- log(train.ts[,'Population'])
+log_valid_pop <- log(valid.ts[,'Population'])
+
+log_train_hpi <- log(train.ts[,'House_Price_Index'])
+log_valid_hpi <- log(valid.ts[,'House_Price_Index'])
+
+log_train_ur <- log(train.ts[,'Unemployment_Rate'])
+log_valid_ur <- log(valid.ts[,'Unemployment_Rate'])
+
+#######subset and log transform#######
+
+log_train_sub <- log(train.ts.subset[,'Bankruptcy_Rate'])
+
+log_train_pop_sub <- log(train.ts.subset[,'Population'])
+
+log_train_hpi_sub <- log(train.ts.subset[,'House_Price_Index'])
+
+log_train_ur_sub <- log(train.ts.subset[,'Unemployment_Rate'])
+
+#######subset without log-transform#######
+
+train_nlog <- train.ts.subset[,'Bankruptcy_Rate']
+valid_nlog <- valid.ts[,'Bankruptcy_Rate']
+
+train_pop_nlog <- train.ts.subset[,'Population']
+valid_pop_nlog <- valid.ts[,'Population']
+
+train_hpi_nlog <- train.ts.subset[,'House_Price_Index']
+valid_hpi_nlog <- valid.ts[,'House_Price_Index']
+
+train_ur_nlog <- train.ts.subset[,'Unemployment_Rate']
+valid_ur_nlog <- valid.ts[,'Unemployment_Rate']
+
+```
+
+
+```{r}
+par(mfrow=c(4,1))
+autoplot(log_train_sub,ts.colour = ('dodgerblue3'),ylab = 'log Bankruptcy Rate',facets = TRUE)
+
+autoplot(log_train_ur_sub,ts.colour = ('dodgerblue3'),ylab = 'log Unemployment Rate',facets = TRUE)
+
+autoplot(log_train_pop_sub,ts.colour = ('dodgerblue3'),ylab = 'log Population',facets = TRUE)
+
+autoplot(log_train_hpi_sub,ts.colour = ('dodgerblue3'),ylab = 'log House Price Index',facets = TRUE)
+
+```
+
+
+```{r}
+
+autoplot(train.ts.subset[,'Bankruptcy_Rate'],ts.colour = ('dodgerblue3'),ylab = 'Bankruptcy Rate',facets = FALSE)
+
+autoplot(train.ts.subset[,'Unemployment_Rate'],ts.colour = ('dodgerblue3'),ylab = 'Unemployment Rate',facets = FALSE)
+
+autoplot(train.ts.subset[,'Population'],ts.colour = ('dodgerblue3'),ylab = 'Population',facets = FALSE)
+
+autoplot(train.ts.subset[,'House_Price_Index'],ts.colour = ('dodgerblue3'),ylab = 'House Price Index',facets = FALSE)
+
+```
+
+
+```{r}
+adf.test(log_train)
+#unable to reject null hypothesis --> Non-stationary
+acf(log_train, lag.max = 48)
+
+#differencing lag 1
+df1 <- diff(log_train)
+adf.test(df1)
+plot(df1)
+#reject null hypothesis --> stationary
+
+acf(df1,lag.max = 60)
+#regular spikes at a lag of 12 indicating season = 12 periods, period of 5 is possible
+
+
+df1.12 <- diff(df1,lag = 12)
+adf.test(df1.12)
+plot(df1.12)
+#reject null hypothesis --> stationary
+
+acf(df1.12, lag.max = 60)  #q=1,3,4, Q= 2,3,4
+pacf(df1.12, lag.max = 60) #p = 1,2,3 P= 0,1,2,3,4
+```
+
+## SARIMAX model with unemployment rate
+
+```{r}
+q <- c(1,3,4)
+Q <-  c(2,3,4)
+p <-  c(0,1,2)
+P <- c(0,1,2)
+
+combination <- expand.grid(p,q,P,Q)
+rmse_list <- c()
+AIC_list <- c()
+logl_list <- c()
+
+
+for (i in 1:nrow(combination)){
+
+a = combination$Var1[i]
+b = combination$Var2[i]
+c = combination$Var3[i]
+d = combination$Var4[i]
+
+tryCatch({ml <- arima(log_train_sub, order = c(a,1,b), seasonal = list(order = c(c,1,d), period = 12), method = "CSS-ML",xreg = data.frame(log_train_ur))
+  }, error=function(e){})
+print(paste(c(a,b,c,d)))
+print(paste("Variance:",ml$sigma2))
+print(paste("AIC:",ml$aic))
+print(paste("log-l:",ml$loglik))
+fcst <- sqrt(mean((valid.ts[,'Bankruptcy_Rate']-exp(forecast(ml,h=24,xreg = data.frame(log_valid_ur))$mean))^2))
+print(paste("RMSE:",fcst))
+rmse_list <- c(rmse_list,fcst)
+AIC_list <- c(AIC_list,ml$aic)
+logl_list <- c(logl_list,ml$loglik)
+
+print(min(rmse_list))
+print(min(AIC_list))
+print(max(logl_list))
+}
+
+```
+
+
+## Residual diagnostics
+```{r}
+ml.best <- arima(log_train_sub, order = c(0,1,1), seasonal = list(order = c(2,1,4), period = 12), method = "CSS-ML",xreg = data.frame(train_ur_nlog))
+fcst <- forecast(ml.best, h = 24,xreg = data.frame(valid_ur_nlog))
+plot(fcst)
+rmse <- sqrt(mean((valid.ts[,'Bankruptcy_Rate']-exp(forecast(ml.best, h = 24,xreg = data.frame(valid_ur_nlog))$mean))^2))
+print(paste("RMSE:",rmse))
+ts.plot(exp(fcst$mean),valid.ts[,'Bankruptcy_Rate'],gpars = list(col=rainbow(10)))
+legend("topleft", legend=c("predicted","observed"), lty=1, col=rainbow(10))
+
+```
+
+```{r}
+ml.best1 <- arima(log_train_sub, order = c(0,1,3), seasonal = list(order = c(2,1,3), period = 12), method = "CSS-ML",xreg = data.frame(train_ur_nlog))
+fcst <- forecast(ml.best1, h = 24,xreg = data.frame(valid_ur_nlog))
+
+plot(exp(log_train_sub),pch=19,ylab = "Bankruptcy Rate")
+fit  <- log_train_sub - ml.best1$residuals
+lines(exp(fit), col = "red")
+legend("topleft",legend=c("fitted", "observed"),
+       col=c("red", "black"),lty=1, cex=1)
+
+
+plot(fcst)
+rmse <- sqrt(mean((valid.ts[,'Bankruptcy_Rate']-exp(forecast(ml.best1, h = 24,xreg = data.frame(valid_ur_nlog))$mean))^2))
+print(paste("RMSE:",rmse))
+ts.plot(exp(fcst$mean),valid.ts[,'Bankruptcy_Rate'],gpars = list(col=rainbow(10)),ylab = "Bankruptcy Rate")
+legend("topleft", legend=c("predicted","observed"), lty=1, col=rainbow(10))
+
+```
+
+
+
+
+
+
+
+```{r}
+D <- -2*(ml.best1$loglik - ml.best$loglik)
+pchisq(D, df = 1-0, lower.tail = F)
+```
+
+
+
+
+### Zero mean
+```{r}
+r1 <- ml.best1$residuals
+t <- as.numeric(time(log_train_sub))
+mean(r1)
+plot(x = t, y = r1)
+abline(h = 0, col='red')
+t.test(r1)
+```
+
+### Normality
+
+```{r}
+qqnorm(r1)
+qqline(r1)
+shapiro.test(r1)
+```
+### Homoscedaticity and autocorrelation
+
+```{r}
+tsdiag(ml.best)
+groups <- c(rep(1, 68), rep(2, 68), rep(3, 68))
+bartlett.test(r1, groups)
+```
