@@ -1,19 +1,26 @@
-# machine-learning
+# eigen faces
 
 ## Introduction
 
-In this repo, I'm trying to create end to end notebooks covering 
-different data science concepts. I'll update this doc as I further build this repository.
+Eigenfaces is the name given to a set of eigenvectors when they are used in the computer vision problem of human face recognition.The eigenfaces themselves form a basis set of all images used to construct the covariance matrix. This produces dimension reduction by allowing the smaller set of basis images to represent the original training images. Classification can be achieved by comparing how faces are represented by the basis set.
+[Wikipedia](https://en.wikipedia.org/wiki/Eigenface)
+
+I have tried to find eigenfaces for my fellow [batchmates](https://www.usfca.edu/arts-sciences/graduate-programs/data-science/our-students) in MSAN (USF) and my [professors](https://www.usfca.edu/arts-sciences/graduate-programs/data-science/faculty).
+
+## External files required for face cropping and alignment
+[haarcascade_frontalface_default.xml](http://gregblogs.com/computer-vision-cropping-faces-from-images-using-opencv2/)
+
+[shape_predictor_68_face_landmarks.dat](https://www.pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/)
 
 
-## Sections
+## Results
 
-### [tutorials](https://github.com/shik3519/machine-learning/tree/master/tutorials)
+### Top 4 eigenfaces for students
+![Eigenfaces for students](../imgs/eigenfaces-student.png)
 
-This section covers tutorial notebooks on the following topics:
-* [Python: Pandas for data science](https://github.com/shik3519/machine-learning/blob/master/tutorials/001-python-pandas.ipynb)
-* [Python: Numpy, Regex, and python hacks](https://github.com/shik3519/machine-learning/blob/master/tutorials/003-python-basics-numpy-regex.ipynb)
-* [Bokeh sample examples](https://github.com/shik3519/machine-learning/blob/master/tutorials/004-bokeh.ipynb)
-* [seaborn exhaustive examples](https://github.com/shik3519/machine-learning/blob/master/tutorials/002-data-visualization.ipynb)
+### Top 4 eigenfaces for faculty
+![Eigenfaces for faculty](../imgs/eigenfaces-faculty.png)
 
+### Image reconstruction using eigenfaces
+![Reconstruction for faculty](../imgs/reconstruct-faculty.png)
 
